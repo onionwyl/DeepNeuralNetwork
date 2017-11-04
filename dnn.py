@@ -18,6 +18,11 @@ def relu(Z):
     cache = Z
     return A, cache
 
+def softmax(Z):
+    A = np.exp(Z)/np.sum(np.exp(Z), axis=0, keepdims=True)
+    cache = Z
+    return A, cache
+
 def sigmoid_backward(dA, cache):
     Z = cache
     s, _ = sigmoid(Z)
@@ -41,27 +46,32 @@ def compute_forward(A, W, b, activation):
         A, activation_cache = sigmoid(Z)
     if activation == "relu":
         A, activation_cache = relu(Z)
+    if activation == "softmax":
+        A, activation_cache = softmax(Z)
     cache = (linear_cache, activation_cache)
     return A, cache
 
-def forward_propagation(X, parameters):
+def forward_propagation(X, parameters, activation_dims):
     caches = []
     A = X
     layer_num = len(parameters) // 2 # parameters include W and b, so len // 2 is layer num
     for l in range(1, layer_num):
         A_prev = A
-        A, cache = compute_forward(A_prev, parameters['W'+str(l)], parameters['b'+str(l)], activation="relu")
+        A, cache = compute_forward(A_prev, parameters['W'+str(l)], parameters['b'+str(l)], activation=activation_dims[l-1])
         caches.append(cache)
-    # print(parameters['W'+str(layer_num)].shape)
-    A, cache = compute_forward(A, parameters['W'+str(layer_num)], parameters['b'+str(layer_num)], activation="sigmoid")
-    # print(A.shape)
+    A, cache = compute_forward(A, parameters['W'+str(layer_num)], parameters['b'+str(layer_num)], activation=activation_dims[layer_num])
     caches.append(cache)
+
     return A, caches
 
-def compute_cost(A_pred, Y):
+def compute_cost(A_pred, Y, out_activation):
     # compute cost with cross-entropy
     m = Y.shape[1]
-    cost = (1./m) * (-np.dot(Y,np.log(A_pred).T) - np.dot(1-Y, np.log(1-A_pred).T))
+    cost = 0
+    if out_activation == "sigmoid":
+        cost = (1./m) * (-np.dot(Y,np.log(A_pred).T) - np.dot(1-Y, np.log(1-A_pred).T))
+    if out_activation == "softmax":
+        cost = (1./m) * (-np.sum(Y * np.log(A_pred)))
     cost = np.squeeze(cost) # to make sure the cost shape is a number
     return cost
 
@@ -72,6 +82,11 @@ def compute_backward(dA, cache, activation):
         dZ = relu_backward(dA, activation_cache)
     if activation == "sigmoid":
         dZ = sigmoid_backward(dA, activation_cache)
+    if activation == "softmax":
+    # The derivative of the cost of softmax function with respect to Z can be computed as
+    # dC/dz = sum(dC/dy * dy/dz) = A_pred - Y
+    # This is easier than compute dA_pred and then compute dZ
+        dZ = dA
     A_prev, W, b = linear_cache
     m = A_prev.shape[1]
     dW = 1./m * np.dot(dZ, A_prev.T)
@@ -79,22 +94,27 @@ def compute_backward(dA, cache, activation):
     dA_prev = np.dot(W.T, dZ)
     return dA_prev, dW, db
 
-def backward_propagation(A_pred, Y, caches):
+def backward_propagation(A_pred, Y, caches, activation_dims):
     grads = {}
+    dA_pred = []
     layer_num = len(caches)
     m = A_pred.shape[1]
     Y = Y.reshape(A_pred.shape) # make sure the shape of Y is same as shape of A_pred
     # derivative of cost with respect to A_pred
     # cost = 1/m*(-Y*log(A_pred).T-(1-Y)*log(1-A_pred).T)
     # dcost/dA_pred = - (Y/A_pred - (1-Y)/(1-A_pred))
-    dA_pred = - (np.divide(Y, A_pred) - np.divide(1 - Y, 1 - A_pred))
+    if activation_dims[-1] == "sigmoid":
+        dA_pred = - (np.divide(Y, A_pred) - np.divide(1 - Y, 1 - A_pred))
+    if activation_dims[-1] == "softmax":
+        # at this point, dA_pred is dZ
+        dA_pred = A_pred-Y
     current_cache = caches[layer_num-1]
-    grads["dA"+str(layer_num)], grads["dW"+str(layer_num)], grads["db"+str(layer_num)] = compute_backward(dA_pred, current_cache, "sigmoid")
+    grads["dA"+str(layer_num)], grads["dW"+str(layer_num)], grads["db"+str(layer_num)] = compute_backward(dA_pred, current_cache, activation_dims[-1])
     # We don't need to compute dA for input layer because in supervised learning, we shouldn't change input.
     # So, we compute dA1, dW1, db1 to dA(l-1), dW(l-1), db(l-1) in the loop
     for l in reversed(range(layer_num - 1)):
         current_cache = caches[l]
-        grads["dA"+str(l + 1)], grads["dW"+str(l+1)], grads["db"+str(l+1)] = compute_backward(grads["dA"+str(l+2)], current_cache, "relu")
+        grads["dA"+str(l + 1)], grads["dW"+str(l+1)], grads["db"+str(l+1)] = compute_backward(grads["dA"+str(l+2)], current_cache, activation_dims[l])
     return grads
 
 def update_parameters(parameters, grads, learning_rate):
