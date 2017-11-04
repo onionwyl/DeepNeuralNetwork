@@ -30,10 +30,10 @@ if __name__ == '__main__':
     train_y = np.row_stack((train_y, np.array(train_y == 0).astype(int)))
     test_y = np.row_stack((test_y, np.array(test_y == 0).astype(int)))
     # try a 5-layer model
-    layer_dims = [input_layer_num, 20, 7, 5, 2]
+    layer_dims = [input_layer_num, 30, 7, 5, 2]
     activation_dims = ["relu", "relu", "relu", "relu","softmax"]
     learning_rate = 0.005
-    num_iterations = 4000
+    num_iterations = 2000
     costs = []
     parameters = dnn.initialize_parameters(layer_dims)
     for i in range(0, num_iterations):
@@ -41,8 +41,6 @@ if __name__ == '__main__':
         cost = dnn.compute_cost(A_pred, train_y, out_activation=activation_dims[-1])
         grads = dnn.backward_propagation(A_pred, train_y, caches, activation_dims)
         parameters = dnn.update_parameters(parameters, grads, learning_rate)
-        print(len(parameters))
-        # print(cost)
         if i % 100 == 0:
             print("Iteration: %i Cost: %f" % (i, cost))
             costs.append(cost)
